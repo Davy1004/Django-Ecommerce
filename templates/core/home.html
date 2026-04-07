@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+
+{% block content %}
+  <h1>Products</h1>
+
+  {% for product in products %}
+    <div style="border:1px solid #ccc; padding:10px; margin:10px;">
+      <h3><a href="{% url 'product_detail' product.slug %}">{{ product.name }}</a></h3>
+
+      <h3>{{ product.name }}</h3>
+      <p>₹{{ product.price }}</p>
+      <p>{{ product.description }}</p>
+    </div>
+  {% empty %}
+    <p>No products available.</p>
+  {% endfor %}
+{% endblock %}
