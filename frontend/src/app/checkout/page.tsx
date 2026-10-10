@@ -1,7 +1,8 @@
 'use client';
 import { useState } from 'react';
 import { useCart } from '@/context/CartContext';
-import { placeOrder } from '@/lib/api';
+import { placeOrder, payOrder } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -10,12 +11,22 @@ import { ArrowLeft, Loader2 } from 'lucide-react';
 export default function CheckoutPage() {
   const { items, totalPrice, clearCart } = useCart();
   const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [form, setForm] = useState({ name: '', email: '', address: '', city: '', phone: '' });
 
   const set = (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm(f => ({ ...f, [field]: e.target.value }));
+
+  if (!authLoading && !user) {
+    return (
+      <div className="max-w-3xl mx-auto px-6 py-24 text-center">
+        <p style={{ color: 'var(--fg-muted)', marginBottom: '24px' }}>Please sign in to place an order.</p>
+        <Link href="/auth/login" className="btn-primary inline-block">Sign in</Link>
+      </div>
+    );
+  }
 
   if (items.length === 0) {
     return (
@@ -31,7 +42,15 @@ export default function CheckoutPage() {
     setError('');
     setLoading(true);
     try {
-      await placeOrder({ ...form, total_amount: totalPrice });
+      // One key per checkout attempt: a double click or retry can't create two orders.
+      const key = crypto.randomUUID();
+      const order = await placeOrder(
+        { ...form, items: items.map(i => ({ product_id: i.id, quantity: i.quantity })) },
+        key,
+      );
+      // Demo payment (PAYMENT_PROVIDER=mock). With Razorpay you would open Razorpay Checkout
+      // using order.payment.key_id / provider_order_id, then send its payment_id + signature here.
+      await payOrder(order.id, `mock_pay_${order.id}`, 'mock_success');
       clearCart();
       router.push('/order-success');
     } catch (err: unknown) {

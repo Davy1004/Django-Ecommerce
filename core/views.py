@@ -1,13 +1,9 @@
-from django.shortcuts import render
-from products.models import Category, Product
-# Create your views here.
+from django.db import connection
+from django.http import JsonResponse
 
 
-def home(request):
-    categories = Category.objects.all()
-    products = Product.objects.all()
-    context = {
-        'categories': categories,
-        'products': products
-    }
-    return render(request, 'core/home.html', context)
+def health(request):
+    """Used by the hosting platform to know the app (and its database) is alive."""
+    with connection.cursor() as cur:
+        cur.execute("SELECT 1")
+    return JsonResponse({"status": "ok"})

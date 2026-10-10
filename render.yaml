@@ -1,0 +1,21 @@
+# Free deployment: Render web service + a free Postgres (e.g. Neon) via DATABASE_URL.
+services:
+  - type: web
+    name: shop-api
+    runtime: python
+    buildCommand: ./build.sh
+    startCommand: gunicorn ecommerce.wsgi:application
+    healthCheckPath: /health/
+    envVars:
+      - key: DEBUG
+        value: "False"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ALLOWED_HOSTS
+        value: shop-api.onrender.com
+      - key: CORS_ALLOWED_ORIGINS
+        value: https://your-frontend.vercel.app
+      - key: DATABASE_URL
+        sync: false   # paste your Postgres connection string in the Render dashboard
+      - key: PAYMENT_PROVIDER
+        value: mock

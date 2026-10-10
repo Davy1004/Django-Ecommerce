@@ -1,8 +1,11 @@
 from django.urls import path
+
 from . import views
 
 urlpatterns = [
-    path('checkout/', views.checkout, name='checkout'),
-    path('success/', views.order_success, name='order_success'),
-    path('api/checkout/', views.checkout_api, name='checkout_api'),
+    path("api/checkout/", views.CheckoutView.as_view(), name="checkout_api"),
+    path("api/orders/", views.OrderListView.as_view(), name="order_list"),
+    path("api/orders/<int:pk>/", views.OrderDetailView.as_view(), name="order_detail"),
+    path("api/orders/<int:pk>/pay/", views.PayOrderView.as_view(), name="order_pay"),
+    path("api/orders/<int:pk>/cancel/", views.CancelOrderView.as_view(), name="order_cancel"),
 ]

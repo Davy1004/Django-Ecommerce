@@ -1,45 +1,12 @@
-# Python
 __pycache__/
 *.pyc
-*.pyo
-*.pyd
 .env
-*.env
-
-# Django
 db.sqlite3
+staticfiles/
 media/
-!media/.gitkeep
-
-# Virtual environment
-venv/
-env/
-
-# Node / Next.js
+.venv/
 node_modules/
 .next/
-.next/cache/
-out/
-build/
-dist/
-*.tsbuildinfo
-
-# Next.js specific (frontend folder)
-frontend/node_modules/
-frontend/.next/
-
-# Env files
+.pytest_cache/
 .env.local
-.env.development.local
-.env.production.local
-
-# Logs
-*.log
-
-# OS junk
-.DS_Store
-Thumbs.db
-
-# Editor
-.vscode/
-.idea/
+.env*.local

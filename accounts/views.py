@@ -1,90 +1,59 @@
-from django.shortcuts import render, redirect
-from django.contrib.auth import authenticate, login, logout
-from django.contrib.auth.models import User
-from rest_framework.decorators import api_view
-from rest_framework.response import Response
+from django.contrib.auth import authenticate
 from rest_framework import status
-from .forms import RegisterForm
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework_simplejwt.tokens import RefreshToken
+
+from .serializers import LoginSerializer, RegisterSerializer, UserSerializer
 
 
-@api_view(['POST'])
-def login_api(request):
-    username = request.data.get('username')
-    password = request.data.get('password')
-
-    if not username or not password:
-        return Response({'error': 'Username and password required'}, status=status.HTTP_400_BAD_REQUEST)
-
-    user = authenticate(request, username=username, password=password)
-    if user:
-        login(request, user)
-        return Response({
-            'success': True,
-            'user': {'id': user.id, 'username': user.username, 'email': user.email}
-        })
-    return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+def auth_payload(user):
+    refresh = RefreshToken.for_user(user)
+    return {
+        "success": True,
+        "user": UserSerializer(user).data,
+        "access": str(refresh.access_token),
+        "refresh": str(refresh),
+    }
 
 
-@api_view(['POST'])
-def register_api(request):
-    username = request.data.get('username')
-    email = request.data.get('email')
-    password1 = request.data.get('password1')
-    password2 = request.data.get('password2')
+class RegisterView(APIView):
+    permission_classes = [AllowAny]
+    throttle_scope = "auth"
 
-    if not all([username, email, password1, password2]):
-        return Response({'error': 'All fields required'}, status=status.HTTP_400_BAD_REQUEST)
-
-    if password1 != password2:
-        return Response({'error': 'Passwords do not match'}, status=status.HTTP_400_BAD_REQUEST)
-
-    if User.objects.filter(username=username).exists():
-        return Response({'error': 'Username already taken'}, status=status.HTTP_400_BAD_REQUEST)
-
-    user = User.objects.create_user(username=username, email=email, password=password1)
-    return Response({
-        'success': True,
-        'user': {'id': user.id, 'username': user.username, 'email': user.email}
-    }, status=status.HTTP_201_CREATED)
+    def post(self, request):
+        serializer = RegisterSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+        return Response(auth_payload(user), status=status.HTTP_201_CREATED)
 
 
-@api_view(['POST'])
-def logout_api(request):
-    logout(request)
-    return Response({'success': True, 'message': 'Logged out'})
+class LoginView(APIView):
+    permission_classes = [AllowAny]
+    throttle_scope = "auth"  # slows down password guessing
+
+    def post(self, request):
+        serializer = LoginSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = authenticate(request, **serializer.validated_data)
+        if user is None:
+            return Response({"error": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
+        return Response(auth_payload(user))
 
 
-@api_view(['GET'])
-def me_api(request):
-    if request.user.is_authenticated:
-        return Response({'id': request.user.id, 'username': request.user.username, 'email': request.user.email})
-    return Response({'error': 'Not authenticated'}, status=status.HTTP_401_UNAUTHORIZED)
+class LogoutView(APIView):
+    """JWTs are stateless: the client just discards its tokens. Kept so the frontend
+    has one place to call; add simplejwt's token blacklist if you need server-side revoke."""
+
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        return Response({"success": True, "message": "Logged out"})
 
 
-# Legacy template views
-def login_view(request):
-    if request.method == "POST":
-        username = request.POST['username']
-        password = request.POST['password']
-        user = authenticate(request, username=username, password=password)
-        if user:
-            login(request, user)
-            return redirect('home')
-        return render(request, 'accounts/login.html', {'error': 'Invalid credentials'})
-    return render(request, 'accounts/login.html')
+class MeView(APIView):
+    permission_classes = [IsAuthenticated]
 
-
-def register_view(request):
-    if request.method == "POST":
-        form = RegisterForm(request.POST)
-        if form.is_valid():
-            form.save()
-            return redirect('login')
-    else:
-        form = RegisterForm()
-    return render(request, 'accounts/register.html', {'form': form})
-
-
-def logout_view(request):
-    logout(request)
-    return redirect('login')
+    def get(self, request):
+        return Response(UserSerializer(request.user).data)

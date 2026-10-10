@@ -1,77 +1,36 @@
-from django.shortcuts import render, get_object_or_404
-from .models import Product, Category
-from rest_framework.decorators import api_view
-from rest_framework.response import Response
+from django.db.models import Prefetch
+from rest_framework import viewsets
+
+from .models import Category, Product
+from .serializers import (
+    CategoryDetailSerializer,
+    CategorySerializer,
+    ProductSerializer,
+)
 
 
-@api_view(['GET'])
-def product_list_api(request):
-    category_slug = request.GET.get('category')
-    search = request.GET.get('search', '')
+class ProductViewSet(viewsets.ReadOnlyModelViewSet):
+    """GET /api/products/?category=<slug>&search=<text>&ordering=price&limit=&offset="""
 
-    products = Product.objects.all()
-    if category_slug:
-        products = products.filter(category__slug=category_slug)
-    if search:
-        products = products.filter(name__icontains=search)
+    serializer_class = ProductSerializer
+    lookup_field = "slug"
+    search_fields = ["name", "description"]
+    ordering_fields = ["price", "name", "created_at"]
 
-    data = [{
-        'id': p.id,
-        'name': p.name,
-        'slug': p.slug,
-        'price': float(p.price),
-        'stock': p.stock,
-        'description': p.description,
-        'image': request.build_absolute_uri(p.image.url) if p.image else None,
-        'category': {'id': p.category.id, 'name': p.category.name, 'slug': p.category.slug}
-    } for p in products]
-
-    return Response(data)
+    def get_queryset(self):
+        # select_related -> one JOIN instead of one extra query per product (N+1)
+        qs = Product.objects.filter(is_active=True).select_related("category")
+        category = self.request.query_params.get("category")
+        return qs.filter(category__slug=category) if category else qs
 
 
-@api_view(['GET'])
-def product_detail_api(request, slug):
-    product = get_object_or_404(Product, slug=slug)
-    return Response({
-        'id': product.id,
-        'name': product.name,
-        'slug': product.slug,
-        'price': float(product.price),
-        'stock': product.stock,
-        'description': product.description,
-        'image': request.build_absolute_uri(product.image.url) if product.image else None,
-        'category': {'id': product.category.id, 'name': product.category.name, 'slug': product.category.slug}
-    })
+class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
+    lookup_field = "slug"
+    pagination_class = None
 
+    def get_queryset(self):
+        active = Product.objects.filter(is_active=True)
+        return Category.objects.prefetch_related(Prefetch("products", queryset=active))
 
-@api_view(['GET'])
-def category_list_api(request):
-    categories = Category.objects.all()
-    return Response([{'id': c.id, 'name': c.name, 'slug': c.slug} for c in categories])
-
-
-@api_view(['GET'])
-def category_detail_api(request, slug):
-    category = get_object_or_404(Category, slug=slug)
-    products = Product.objects.filter(category=category)
-    return Response({
-        'id': category.id,
-        'name': category.name,
-        'slug': category.slug,
-        'products': [{
-            'id': p.id, 'name': p.name, 'slug': p.slug,
-            'price': float(p.price), 'stock': p.stock,
-            'image': request.build_absolute_uri(p.image.url) if p.image else None,
-        } for p in products]
-    })
-
-
-def product_detail(request, slug):
-    product = get_object_or_404(Product, slug=slug)
-    return render(request, 'products/product_detail.html', {'product': product})
-
-
-def category_detail(request, slug):
-    category = get_object_or_404(Category, slug=slug)
-    products = Product.objects.filter(category=category)
-    return render(request, 'products/category_detail.html', {'category': category, 'products': products})
+    def get_serializer_class(self):
+        return CategoryDetailSerializer if self.action == "retrieve" else CategorySerializer
