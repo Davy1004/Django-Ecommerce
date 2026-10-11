@@ -16,7 +16,7 @@ python manage.py runserver           # API on :8000
 
 cd frontend && npm install && npm run dev      # shop on :3000
 ```
-Tests: `pytest` (59 tests; 3 concurrency tests need PostgreSQL and are skipped on SQLite — run with `DATABASE_URL=postgres://... pytest`).
+Tests: `pytest` (62 tests; 3 concurrency tests need PostgreSQL and are skipped on SQLite — run with `DATABASE_URL=postgres://... pytest`).
 
 ## API
 | Method | Path | Notes |
@@ -30,6 +30,7 @@ Tests: `pytest` (59 tests; 3 concurrency tests need PostgreSQL and are skipped o
 | POST | `/orders/api/orders/<id>/cancel/` | unpaid only; returns the stock |
 | GET | `/orders/api/orders/` · `/orders/api/orders/<id>/` | your own orders only |
 | POST | `/events/webhook/` | payment-provider webhook; signed, stored, processed later (see below) |
+| GET | `/events/status/` | admin only: queue counts, oldest waiting age, retrying, recent dead events |
 | GET | `/health/` | for the hosting platform |
 
 ## Payments

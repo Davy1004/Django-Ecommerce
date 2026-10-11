@@ -1,5 +1,7 @@
 from django.db import IntegrityError, transaction
-from rest_framework.permissions import AllowAny
+from django.db.models import Count
+from django.utils import timezone
+from rest_framework.permissions import AllowAny, IsAdminUser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -34,3 +36,28 @@ class PaymentWebhookView(APIView):
         except IntegrityError:
             return Response({"status": "duplicate"})
         return Response({"status": "accepted"})
+
+
+class QueueStatusView(APIView):
+    """Admin-only health view of the pipeline: how many events per state, how stale the oldest
+    waiting one is, and the latest dead ones. This is what you would alert on in production."""
+
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        counts = {s: 0 for s in PaymentEvent.Status.values}
+        for row in PaymentEvent.objects.values("status").annotate(n=Count("id")):
+            counts[row["status"]] = row["n"]
+
+        waiting = PaymentEvent.objects.filter(status=PaymentEvent.Status.NEW)
+        oldest = waiting.order_by("created_at").values_list("created_at", flat=True).first()
+        dead = PaymentEvent.objects.filter(status=PaymentEvent.Status.DEAD).order_by("-id")[:10]
+        return Response({
+            "counts": counts,
+            "oldest_waiting_age_seconds": int((timezone.now() - oldest).total_seconds()) if oldest else None,
+            "retrying": waiting.filter(attempts__gt=0).count(),
+            "recent_dead": [
+                {"id": e.id, "event_type": e.event_type, "provider_order_id": e.provider_order_id,
+                 "attempts": e.attempts, "last_error": e.last_error} for e in dead
+            ],
+        })
