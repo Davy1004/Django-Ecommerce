@@ -46,6 +46,10 @@ class PaymentVerificationFailed(CheckoutError):
     status_code = 400
 
 
+class OrderNotFound(CheckoutError):
+    status_code = 404
+
+
 @transaction.atomic
 def _create_order(user, items, shipping, idempotency_key):
     wanted = defaultdict(int)  # the same product listed twice is merged
@@ -137,6 +141,26 @@ def confirm_payment(*, order_id, user, payment_id, signature):
         raise OrderNotPayable("This order was cancelled (it may have expired). Please order again.")
     if not get_provider().verify(order, payment_id, signature):
         raise PaymentVerificationFailed("Payment verification failed.")
+    order.status = Order.Status.PAID
+    order.provider_payment_id = payment_id
+    order.save(update_fields=["status", "provider_payment_id", "updated_at"])
+    return order
+
+
+@transaction.atomic
+def settle_payment(*, provider_order_id, payment_id):
+    """Mark an order paid because the payment PROVIDER told us so (webhook).
+
+    No user/signature argument: the webhook's own signature was already checked before the
+    event was stored. Safe to call many times for the same payment.
+    """
+    order = Order.objects.select_for_update().filter(provider_order_id=provider_order_id).first()
+    if order is None:
+        raise OrderNotFound(f"No order with provider id {provider_order_id!r} (yet).")
+    if order.status == Order.Status.PAID:
+        return order
+    if order.status == Order.Status.CANCELLED:
+        raise OrderNotPayable(f"Order #{order.pk} was cancelled but payment {payment_id} was captured - refund needed.")
     order.status = Order.Status.PAID
     order.provider_payment_id = payment_id
     order.save(update_fields=["status", "provider_payment_id", "updated_at"])

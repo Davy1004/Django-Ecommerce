@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     "accounts",
     "products",
     "orders",
+    "events",
     "core",
 ]
 
@@ -138,6 +139,12 @@ RAZORPAY_KEY_ID = os.environ.get("RAZORPAY_KEY_ID", "")
 RAZORPAY_KEY_SECRET = os.environ.get("RAZORPAY_KEY_SECRET", "")
 # Unpaid orders hold stock; the expire_pending_orders command releases it after this long.
 PENDING_ORDER_TTL_MINUTES = int(os.environ.get("PENDING_ORDER_TTL_MINUTES", "30"))
+
+# Payment-event pipeline (webhook -> queue table -> worker)
+# Empty secret = webhook endpoint refuses everything (fail closed).
+WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET", "")
+EVENT_MAX_ATTEMPTS = int(os.environ.get("EVENT_MAX_ATTEMPTS", "5"))
+EVENT_BACKOFF_SECONDS = int(os.environ.get("EVENT_BACKOFF_SECONDS", "5"))
 
 if not DEBUG:
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
