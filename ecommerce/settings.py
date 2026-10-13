@@ -119,7 +119,7 @@ REST_FRAMEWORK = {
     "COERCE_DECIMAL_TO_STRING": False,  # prices are plain numbers in JSON for the frontend
     "EXCEPTION_HANDLER": "core.exceptions.api_exception_handler",
     "DEFAULT_THROTTLE_CLASSES": ["rest_framework.throttling.ScopedRateThrottle"],
-    "DEFAULT_THROTTLE_RATES": {"auth": "20/min", "checkout": "30/min"},
+    "DEFAULT_THROTTLE_RATES": {"auth": "20/min", "checkout": "30/min", "review": "30/min"},
 }
 
 SIMPLE_JWT = {
