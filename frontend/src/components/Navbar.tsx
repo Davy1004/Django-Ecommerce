@@ -4,11 +4,13 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCart } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
-import { ShoppingCart, User, LogOut, Package, Search, Menu, X, ReceiptText } from 'lucide-react';
+import { ShoppingCart, User, LogOut, Package, Search, Menu, X, ReceiptText, Heart, LayoutDashboard } from 'lucide-react';
+import { useWishlist } from '@/context/WishlistContext';
 
 export default function Navbar() {
   const { totalItems } = useCart();
   const { user, logout } = useAuth();
+  const { count: wishCount } = useWishlist();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
@@ -36,6 +38,7 @@ export default function Navbar() {
             <Link href="/products" className={nav}>Products</Link>
             <Link href="/categories" className={nav}>Categories</Link>
             {user && <Link href="/orders" className={nav}>Orders</Link>}
+            {user?.is_staff && <Link href="/dashboard" className={`${nav} flex items-center gap-1.5`}><LayoutDashboard size={15} /> Dashboard</Link>}
           </div>
 
           <form onSubmit={search} role="search" className="hidden md:flex flex-1 max-w-md ml-auto relative">
@@ -45,6 +48,13 @@ export default function Navbar() {
           </form>
 
           <div className="flex items-center gap-4 ml-auto md:ml-0">
+            <Link href="/wishlist" className="relative group hidden sm:block" aria-label={`Wishlist, ${wishCount} items`}>
+              <Heart size={22} className="group-hover:opacity-70 transition-opacity" />
+              {wishCount > 0 && (
+                <span className="absolute -top-2 -right-2 text-white rounded-full w-5 h-5 flex items-center justify-center font-bold"
+                  style={{ background: '#e11d48', fontSize: '0.65rem' }}>{wishCount}</span>
+              )}
+            </Link>
             <Link href="/cart" className="relative group" aria-label={`Cart, ${totalItems} items`}>
               <ShoppingCart size={22} className="group-hover:opacity-70 transition-opacity" />
               {totalItems > 0 && (
@@ -74,6 +84,8 @@ export default function Navbar() {
             </form>
             <Link href="/products" onClick={() => setOpen(false)} className={nav}>Products</Link>
             <Link href="/categories" onClick={() => setOpen(false)} className={nav}>Categories</Link>
+            <Link href="/wishlist" onClick={() => setOpen(false)} className={`${nav} flex items-center gap-2`}><Heart size={16} /> Wishlist {wishCount > 0 && `(${wishCount})`}</Link>
+            {user?.is_staff && <Link href="/dashboard" onClick={() => setOpen(false)} className={`${nav} flex items-center gap-2`}><LayoutDashboard size={16} /> Dashboard</Link>}
             {user ? (
               <>
                 <Link href="/orders" onClick={() => setOpen(false)} className={`${nav} flex items-center gap-2`}><ReceiptText size={16} /> Your orders</Link>

@@ -9,6 +9,9 @@ import AddToCartButton from '@/components/AddToCartButton';
 import ProductCard from '@/components/ProductCard';
 import Breadcrumbs from '@/components/Breadcrumbs';
 import ApiDown from '@/components/ApiDown';
+import Reviews from '@/components/Reviews';
+import Stars from '@/components/Stars';
+import HeartButton from '@/components/HeartButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -49,6 +52,11 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
           <Link href={`/categories/${product.category.slug}`} className="eyebrow hover:opacity-70">{product.category.name}</Link>
           <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(1.9rem, 4vw, 2.7rem)', lineHeight: 1.15, margin: '10px 0 18px' }}>{product.name}</h1>
 
+          <a href="#reviews" className="inline-flex items-center gap-2 mb-5 text-sm hover:opacity-70">
+            <Stars value={product.avg_rating} size={16} />
+            <span className="muted">{product.review_count ? `${product.avg_rating?.toFixed(1)} · ${product.review_count} review${product.review_count > 1 ? 's' : ''}` : 'No reviews yet'}</span>
+          </a>
+
           <div className="flex items-center gap-4 mb-6 flex-wrap">
             <span style={{ fontSize: '2.1rem', fontWeight: 700 }}>{inr(product.price)}</span>
             <span className={`badge ${product.stock === 0 ? 'badge-cancelled' : low ? 'badge-pending' : 'badge-paid'}`}>{stockLabel(product)}</span>
@@ -57,7 +65,10 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
 
           <p className="muted" style={{ lineHeight: 1.85, fontSize: '1.02rem', marginBottom: 28 }}>{product.description}</p>
 
-          <AddToCartButton product={product} />
+          <div className="flex gap-3 items-start">
+            <div className="flex-1"><AddToCartButton product={product} /></div>
+            <HeartButton productId={product.id} name={product.name} size={20} className="shrink-0 border border-[var(--border)]" />
+          </div>
 
           <ul className="card mt-8 p-5 flex flex-col gap-4 text-sm" style={{ listStyle: 'none' }}>
             <li className="flex items-center gap-3"><Truck size={18} style={{ color: 'var(--accent)' }} /> Free delivery, dispatched within 24 hours</li>
@@ -72,6 +83,11 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
           </dl>
         </div>
       </div>
+
+      <section id="reviews" className="mt-24 scroll-mt-28">
+        <h2 className="section-title mb-7">Customer reviews</h2>
+        <Reviews slug={product.slug} />
+      </section>
 
       {related.length > 0 && (
         <section className="mt-24">

@@ -1,11 +1,11 @@
 'use client';
 import { useState } from 'react';
 import { useCart } from '@/context/CartContext';
-import { placeOrder, payOrder } from '@/lib/api';
+import { placeOrder, payOrder, previewCoupon, CouponQuote } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Loader2, Lock } from 'lucide-react';
+import { ArrowLeft, Loader2, Lock, Tag, X } from 'lucide-react';
 import { inr } from '@/lib/format';
 import { useToast } from '@/context/ToastContext';
 
@@ -16,6 +16,10 @@ export default function CheckoutPage() {
   const { show } = useToast();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [code, setCode] = useState('');
+  const [quote, setQuote] = useState<CouponQuote | null>(null);
+  const [couponMsg, setCouponMsg] = useState('');
+  const [checking, setChecking] = useState(false);
   const [form, setForm] = useState({ name: '', email: '', address: '', city: '', phone: '' });
 
   const set = (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
@@ -39,6 +43,18 @@ export default function CheckoutPage() {
     );
   }
 
+  const cartLines = items.map(i => ({ product_id: i.id, quantity: i.quantity }));
+  const payable = quote ? quote.total : totalPrice;
+
+  const applyCoupon = async () => {
+    if (!code.trim()) return;
+    setChecking(true); setCouponMsg('');
+    try { setQuote(await previewCoupon(code.trim(), cartLines)); }
+    catch (err) { setQuote(null); setCouponMsg(err instanceof Error ? err.message : 'Could not apply that coupon'); }
+    finally { setChecking(false); }
+  };
+  const removeCoupon = () => { setQuote(null); setCode(''); setCouponMsg(''); };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -48,7 +64,7 @@ export default function CheckoutPage() {
       // One key per checkout attempt: a double click or retry can't create two orders.
       const key = crypto.randomUUID();
       const order = await placeOrder(
-        { ...form, items: items.map(i => ({ product_id: i.id, quantity: i.quantity })) },
+        { ...form, items: cartLines, coupon_code: quote?.code ?? '' },
         key,
       );
       orderId = order.id;
@@ -118,7 +134,7 @@ export default function CheckoutPage() {
 
           <p className="text-xs muted flex items-center gap-1.5"><Lock size={12} /> Demo checkout: your card is never charged.</p>
           <button type="submit" disabled={loading} className="btn-primary flex items-center justify-center gap-2 mt-1">
-            {loading ? <><Loader2 size={18} className="animate-spin" /> Placing Order...</> : `Place order — ${inr(totalPrice)}`}
+            {loading ? <><Loader2 size={18} className="animate-spin" /> Placing Order...</> : `Place order — ${inr(payable)}`}
           </button>
         </form>
 
@@ -142,11 +158,30 @@ export default function CheckoutPage() {
                 </div>
               ))}
             </div>
-            <div className="border-t pt-4" style={{ borderColor: 'var(--border)' }}>
-              <div className="flex justify-between font-bold">
-                <span>Total</span>
-                <span>{inr(totalPrice)}</span>
-              </div>
+            <div className="mb-5">
+              {quote ? (
+                <div className="flex items-center justify-between rounded-xl px-3.5 py-2.5 text-sm" style={{ background: '#dcfce7', color: '#166534' }}>
+                  <span className="flex items-center gap-2"><Tag size={15} /> <strong>{quote.code}</strong> applied</span>
+                  <button type="button" onClick={removeCoupon} aria-label="Remove coupon"><X size={16} /></button>
+                </div>
+              ) : (
+                <>
+                  <div className="flex gap-2">
+                    <input value={code} onChange={e => setCode(e.target.value.toUpperCase())} placeholder="Coupon code" aria-label="Coupon code"
+                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); applyCoupon(); } }} style={{ padding: '10px 14px' }} />
+                    <button type="button" onClick={applyCoupon} disabled={checking || !code.trim()} className="btn-ghost" style={{ padding: '10px 16px' }}>
+                      {checking ? <Loader2 size={15} className="animate-spin" /> : 'Apply'}
+                    </button>
+                  </div>
+                  {couponMsg ? <p className="text-xs mt-2" style={{ color: '#dc2626' }}>{couponMsg}</p>
+                    : <p className="text-xs mt-2 muted">Try <button type="button" className="underline" onClick={() => setCode('WELCOME10')}>WELCOME10</button> or <button type="button" className="underline" onClick={() => setCode('FLAT200')}>FLAT200</button></p>}
+                </>
+              )}
+            </div>
+            <div className="border-t pt-4 flex flex-col gap-2" style={{ borderColor: 'var(--border)' }}>
+              <div className="flex justify-between text-sm muted"><span>Subtotal</span><span>{inr(totalPrice)}</span></div>
+              {quote && <div className="flex justify-between text-sm" style={{ color: '#16a34a' }}><span>Discount ({quote.code})</span><span>-{inr(quote.discount)}</span></div>}
+              <div className="flex justify-between font-bold text-lg pt-1"><span>Total</span><span>{inr(payable)}</span></div>
             </div>
           </div>
         </div>

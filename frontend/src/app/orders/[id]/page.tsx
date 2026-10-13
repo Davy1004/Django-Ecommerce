@@ -79,8 +79,12 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
               </div>
             ))}
           </div>
-          <div className="flex justify-between pt-5 mt-5 font-bold" style={{ borderTop: '1px solid var(--border)', fontSize: '1.1rem' }}>
-            <span>Total</span><span>{inr(order.total_amount)}</span>
+          <div className="pt-5 mt-5 flex flex-col gap-2" style={{ borderTop: '1px solid var(--border)' }}>
+            {order.discount_amount > 0 && <>
+              <div className="flex justify-between text-sm muted"><span>Subtotal</span><span>{inr(order.subtotal)}</span></div>
+              <div className="flex justify-between text-sm" style={{ color: '#16a34a' }}><span>Discount ({order.coupon_code})</span><span>-{inr(order.discount_amount)}</span></div>
+            </>}
+            <div className="flex justify-between font-bold" style={{ fontSize: '1.1rem' }}><span>Total</span><span>{inr(order.total_amount)}</span></div>
           </div>
         </div>
 

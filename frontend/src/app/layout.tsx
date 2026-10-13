@@ -6,6 +6,7 @@ import { AuthProvider } from '@/context/AuthContext';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { ToastProvider } from '@/context/ToastContext';
+import { WishlistProvider } from '@/context/WishlistContext';
 
 const display = Playfair_Display({ subsets: ['latin'], variable: '--font-display', display: 'swap' });
 const body = DM_Sans({ subsets: ['latin'], variable: '--font-body', display: 'swap' });
@@ -22,9 +23,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <AuthProvider>
           <CartProvider>
             <ToastProvider>
-              <Navbar />
-              <main style={{ minHeight: '60vh' }}>{children}</main>
-              <Footer />
+              <WishlistProvider>
+                <Navbar />
+                <main style={{ minHeight: '60vh' }}>{children}</main>
+                <Footer />
+              </WishlistProvider>
             </ToastProvider>
           </CartProvider>
         </AuthProvider>

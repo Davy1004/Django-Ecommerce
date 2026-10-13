@@ -29,7 +29,8 @@ function Success() {
               <span className="text-sm" style={{ fontWeight: 600 }}>{inr(i.line_total)}</span>
             </div>
           ))}
-          <div className="flex justify-between pt-3 mt-2 font-bold" style={{ borderTop: '1px solid var(--border)' }}><span>Total paid</span><span>{inr(order.total_amount)}</span></div>
+          {order.discount_amount > 0 && <div className="flex justify-between pt-3 mt-2 text-sm" style={{ borderTop: '1px solid var(--border)', color: '#16a34a' }}><span>Coupon {order.coupon_code}</span><span>-{inr(order.discount_amount)}</span></div>}
+          <div className="flex justify-between pt-3 mt-2 font-bold" style={order.discount_amount > 0 ? undefined : { borderTop: '1px solid var(--border)' }}><span>Total paid</span><span>{inr(order.total_amount)}</span></div>
         </div>
       )}
 

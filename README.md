@@ -31,7 +31,20 @@ Tests: `pytest` (62 tests; 3 concurrency tests need PostgreSQL and are skipped o
 | GET | `/orders/api/orders/` · `/orders/api/orders/<id>/` | your own orders only |
 | POST | `/events/webhook/` | payment-provider webhook; signed, stored, processed later (see below) |
 | GET | `/events/status/` | admin only: queue counts, oldest waiting age, retrying, recent dead events |
+| GET | `/api/products/<slug>/reviews/` | rating summary + reviews (`verified_purchase` = has a PAID order for it) |
+| POST · DELETE | `/api/products/<slug>/reviews/` | add/update or remove **your** review `{rating 1-5, title?, body?}` (one per user per product) |
+| GET · POST | `/api/wishlist/` | your saved products · save one `{product_id}` (idempotent) |
+| DELETE | `/api/wishlist/<product_id>/` | |
+| POST | `/orders/api/coupons/validate/` | `{code, items}` → discount preview; nothing is redeemed until checkout (`coupon_code` on checkout) |
+| GET | `/api/admin/sales/?days=30` | staff only: revenue, orders, top products, categories, coupons, low stock |
 | GET | `/health/` | for the hosting platform |
+
+## Features beyond checkout
+- **Reviews and ratings:** one review per user per product, enforced by a unique constraint. Averages and counts come from the same query as the product list (no N+1), and `?ordering=rating` sorts best-rated first with unrated products last.
+- **Wishlist:** per-user, idempotent add and remove, optimistic hearts in the UI.
+- **Coupons:** percent or fixed, minimum order, cap, expiry, total and per-user limits. The discount is computed on the server inside the checkout transaction; the coupon row is locked so two buyers cannot take the last redemption, and cancelling or expiring an order gives the redemption back.
+- **Order emails:** confirmation when an order is paid (by the user or by the webhook worker) and a notice when it is cancelled. Sent after the transaction commits; a mail-server failure is logged and never breaks the payment. Without SMTP settings the emails are printed to the server log.
+- **Sales dashboard (`/dashboard`, staff only):** revenue per day, KPIs, top products, category split, coupon usage, low stock. Revenue counts PAID orders only.
 
 ## Payments
 `PAYMENT_PROVIDER=mock` (default) needs no account. For Razorpay **test mode**: create free test keys, set
@@ -64,4 +77,6 @@ Unpaid orders hold stock. `python manage.py expire_pending_orders` cancels those
 4. Back in Render, set `CORS_ALLOWED_ORIGINS` to your Vercel address (no trailing slash) and let it redeploy.
 5. **Worker (free):** Render's free tier has no background workers, so `.github/workflows/worker.yml` runs `process_events --once` and `expire_pending_orders` every hour from GitHub Actions. Add your Neon string as a repo secret named `DATABASE_URL` (Settings → Secrets and variables → Actions). You can also run it by hand from the Actions tab. Scheduled runs are free for public repos.
 
-Notes: uploaded product images need external storage in production (Render's disk is ephemeral). Create an admin with `createsuperuser` locally against the Neon string, or ask for a seeded admin if you need `/admin` on the live site.
+6. **Dashboard admin and emails (optional):** in Render set `ADMIN_USERNAME`, `ADMIN_EMAIL` and `ADMIN_PASSWORD`; every deploy runs `ensure_admin`, which creates or updates that staff user (it does nothing when they are empty, so no password is ever in the repo). Set `FRONTEND_URL` to your Vercel address so email links work. For real email delivery set `EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend` plus `EMAIL_HOST`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `DEFAULT_FROM_EMAIL` (any free SMTP, e.g. Gmail with an app password or Brevo); otherwise emails appear in the Render log.
+
+Notes: uploaded product images need external storage in production (Render's disk is ephemeral), which is why the demo catalogue uses illustrations that ship with the frontend.

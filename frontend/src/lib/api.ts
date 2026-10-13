@@ -9,6 +9,8 @@ export interface Product {
   description: string;
   image: string | null;
   category: Category;
+  avg_rating?: number | null;
+  review_count?: number;
 }
 
 export interface Category {
@@ -22,6 +24,7 @@ export interface CategoryWithProducts extends Category {
 }
 
 export interface OrderPayload {
+  coupon_code?: string;
   name: string;
   email: string;
   address: string;
@@ -49,6 +52,9 @@ export interface OrderItem {
 export interface OrderDetail {
   id: number;
   status: 'PENDING' | 'PAID' | 'CANCELLED';
+  subtotal: number;
+  discount_amount: number;
+  coupon_code: string;
   total_amount: number;
   name: string;
   email: string;
@@ -58,6 +64,46 @@ export interface OrderDetail {
   payment_provider: string;
   created_at: string;
   items: OrderItem[];
+}
+
+export interface Review {
+  id: number;
+  rating: number;
+  title: string;
+  body: string;
+  author: string;
+  verified_purchase: boolean;
+  is_mine: boolean;
+  created_at: string;
+}
+
+export interface ReviewsPayload {
+  summary: { average: number | null; count: number; distribution: Record<'1' | '2' | '3' | '4' | '5', number> };
+  results: Review[];
+}
+
+export interface CouponQuote {
+  code: string;
+  description: string;
+  subtotal: number;
+  discount: number;
+  total: number;
+}
+
+export interface SalesDashboard {
+  days: number;
+  totals: {
+    revenue: number; paid_orders: number; units_sold: number; average_order_value: number;
+    discounts_given: number; customers: number; orders_by_status: Record<'PENDING' | 'PAID' | 'CANCELLED', number>;
+  };
+  range: { revenue: number; orders: number };
+  daily: { date: string; revenue: number; orders: number }[];
+  top_products: { name: string; units: number; revenue: number }[];
+  by_category: { category: string; units: number; revenue: number }[];
+  coupons: { code: string; orders: number; discount: number }[];
+  low_stock: { id: number; name: string; slug: string; stock: number }[];
+  recent_orders: { id: number; customer: string; status: 'PENDING' | 'PAID' | 'CANCELLED'; total: number; created_at: string }[];
+  catalogue: { products: number; coupons_active: number; reviews: number; average_rating: number | null };
 }
 
 export interface Page<T> {
@@ -84,6 +130,7 @@ export interface User {
   id: number;
   username: string;
   email: string;
+  is_staff?: boolean;
 }
 
 // --- JWT handling: tokens live in localStorage and are sent as a Bearer header ---
@@ -111,6 +158,7 @@ async function fetchAPI<T>(path: string, options?: RequestInit): Promise<T> {
     const err = await res.json().catch(() => ({}));
     throw new ApiError(err.error || `API Error: ${res.status}`, res.status);
   }
+  if (res.status === 204) return undefined as T;
   return res.json();
 }
 
@@ -166,3 +214,20 @@ export const getMe = () => {
   if (!getToken()) return Promise.reject(new Error('Not signed in'));
   return fetchAPI<User>('/accounts/api/me/');
 };
+
+// --- reviews ---
+export const getReviews = (slug: string) => fetchAPI<ReviewsPayload>(`/api/products/${slug}/reviews/`);
+export const saveReview = (slug: string, data: { rating: number; title: string; body: string }) =>
+  fetchAPI<ReviewsPayload>(`/api/products/${slug}/reviews/`, { method: 'POST', body: JSON.stringify(data) });
+export const deleteReview = (slug: string) => fetchAPI<void>(`/api/products/${slug}/reviews/`, { method: 'DELETE' });
+
+// --- wishlist ---
+export const getWishlist = () => fetchAPI<{ count: number; results: Product[] }>('/api/wishlist/');
+export const addToWishlist = (productId: number) =>
+  fetchAPI<{ product_id: number }>('/api/wishlist/', { method: 'POST', body: JSON.stringify({ product_id: productId }) });
+export const removeFromWishlist = (productId: number) => fetchAPI<void>(`/api/wishlist/${productId}/`, { method: 'DELETE' });
+
+// --- coupons & admin ---
+export const previewCoupon = (code: string, items: { product_id: number; quantity: number }[]) =>
+  fetchAPI<CouponQuote>('/orders/api/coupons/validate/', { method: 'POST', body: JSON.stringify({ code, items }) });
+export const getSalesDashboard = (days = 30) => fetchAPI<SalesDashboard>(`/api/admin/sales/?days=${days}`);

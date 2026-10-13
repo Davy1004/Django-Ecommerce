@@ -5,6 +5,8 @@ import { productImage, inr } from '@/lib/format';
 import { useCart } from '@/context/CartContext';
 import { useToast } from '@/context/ToastContext';
 import { ShoppingCart } from 'lucide-react';
+import Stars from '@/components/Stars';
+import HeartButton from '@/components/HeartButton';
 
 export default function ProductCard({ product }: { product: Omit<Product, 'category' | 'description'> & Partial<Pick<Product, 'category' | 'description'>> }) {
   const { addItem } = useCart();
@@ -23,6 +25,7 @@ export default function ProductCard({ product }: { product: Omit<Product, 'categ
         <div className="relative overflow-hidden" style={{ aspectRatio: '1 / 1', background: 'var(--card-img-bg)' }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={productImage(product)} alt={product.name} loading="lazy" className="tile-img w-full h-full object-cover" />
+          <HeartButton productId={product.id} name={product.name} className="absolute top-3 right-3" />
           {out && <span className="badge absolute top-3 left-3" style={{ background: '#1a1208', color: '#fff' }}>Sold out</span>}
           {!out && product.stock <= 5 && <span className="badge absolute top-3 left-3 badge-pending">Only {product.stock} left</span>}
         </div>
@@ -31,6 +34,9 @@ export default function ProductCard({ product }: { product: Omit<Product, 'categ
           <h3 className="line-clamp-2 mb-3" style={{ fontFamily: 'var(--font-display)', fontSize: '1.05rem', lineHeight: 1.3, minHeight: '2.7rem' }}>
             {product.name}
           </h3>
+          {product.review_count ? (
+            <div className="flex items-center gap-1.5 -mt-2 mb-3 text-xs muted"><Stars value={product.avg_rating} size={13} /> {product.avg_rating?.toFixed(1)} <span>({product.review_count})</span></div>
+          ) : <div style={{ height: 8 }} />}
           <div className="flex items-center justify-between">
             <span style={{ fontWeight: 700, fontSize: '1.1rem' }}>{inr(product.price)}</span>
             <button onClick={handleAdd} disabled={out} aria-label={`Add ${product.name} to cart`}
