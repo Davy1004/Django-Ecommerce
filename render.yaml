@@ -15,7 +15,7 @@ services:
       - key: ALLOWED_HOSTS
         value: .onrender.com        # any *.onrender.com name Render gives you
       - key: CORS_ALLOWED_ORIGINS
-        value: https://your-frontend.vercel.app
+        value: https://django-ecommerce-theta.vercel.app   # your Vercel origin, no trailing slash. Render re-applies this on every deploy
       - key: DATABASE_URL
         sync: false   # paste your Postgres connection string in the Render dashboard
       - key: PAYMENT_PROVIDER
