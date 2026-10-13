@@ -8,7 +8,7 @@ Key ideas
 """
 from collections import defaultdict
 from datetime import timedelta
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
 from django.conf import settings
 from django.db import IntegrityError, transaction
@@ -17,7 +17,8 @@ from django.utils import timezone
 
 from products.models import Product
 
-from .models import Order, OrderItem
+from .models import Coupon, Order, OrderItem
+from . import emails
 from .payments import get_provider
 
 
@@ -50,8 +51,73 @@ class OrderNotFound(CheckoutError):
     status_code = 404
 
 
+class CouponInvalid(CheckoutError):
+    status_code = 400
+
+
+CENT = Decimal("0.01")
+MIN_PAYABLE = Decimal("1.00")  # payment providers cannot charge zero
+
+
+def calculate_discount(coupon, subtotal):
+    """Pure maths: how much `coupon` takes off `subtotal`. Never lets the total drop below Rs 1."""
+    if coupon.kind == Coupon.Kind.PERCENT:
+        discount = (subtotal * coupon.value / 100).quantize(CENT, rounding=ROUND_HALF_UP)
+        if coupon.max_discount is not None:
+            discount = min(discount, coupon.max_discount)
+    else:
+        discount = coupon.value
+    return max(Decimal("0"), min(discount, subtotal - MIN_PAYABLE)).quantize(CENT)
+
+
+def check_coupon(coupon, *, user, subtotal, now=None):
+    """Raise CouponInvalid with a customer-friendly reason, or return the discount."""
+    now = now or timezone.now()
+    if not coupon.is_active:
+        raise CouponInvalid("This coupon is no longer active.")
+    if coupon.valid_from and now < coupon.valid_from:
+        raise CouponInvalid("This coupon is not valid yet.")
+    if coupon.valid_until and now > coupon.valid_until:
+        raise CouponInvalid("This coupon has expired.")
+    if coupon.max_uses is not None and coupon.used_count >= coupon.max_uses:
+        raise CouponInvalid("This coupon has been fully redeemed.")
+    if subtotal < coupon.min_order_amount:
+        raise CouponInvalid(f"Add items worth \u20b9{coupon.min_order_amount:g} or more to use this coupon.")
+    if coupon.once_per_user and Order.objects.filter(user=user, coupon=coupon).exclude(status=Order.Status.CANCELLED).exists():
+        raise CouponInvalid("You have already used this coupon.")
+    return calculate_discount(coupon, subtotal)
+
+
+def find_coupon(code, *, lock=False):
+    qs = Coupon.objects.select_for_update() if lock else Coupon.objects
+    coupon = qs.filter(code=(code or "").strip().upper()).first()
+    if coupon is None:
+        raise CouponInvalid("That coupon code does not exist.")
+    return coupon
+
+
+def price_items(items):
+    """Server-side subtotal for a cart (used by the coupon preview endpoint)."""
+    wanted = defaultdict(int)
+    for item in items:
+        wanted[item["product_id"]] += item["quantity"]
+    products = {p.id: p for p in Product.objects.filter(id__in=wanted, is_active=True)}
+    missing = sorted(set(wanted) - set(products))
+    if missing:
+        raise ProductUnavailable("Some products are not available.", {"product_ids": missing})
+    return sum((products[pid].price * qty for pid, qty in wanted.items()), Decimal("0"))
+
+
+def preview_coupon(*, user, code, items):
+    subtotal = price_items(items)
+    coupon = find_coupon(code)
+    discount = check_coupon(coupon, user=user, subtotal=subtotal)
+    return {"code": coupon.code, "description": coupon.description, "subtotal": subtotal,
+            "discount": discount, "total": subtotal - discount}
+
+
 @transaction.atomic
-def _create_order(user, items, shipping, idempotency_key):
+def _create_order(user, items, shipping, idempotency_key, coupon_code=""):
     wanted = defaultdict(int)  # the same product listed twice is merged
     for item in items:
         wanted[item["product_id"]] += item["quantity"]
@@ -79,12 +145,18 @@ def _create_order(user, items, shipping, idempotency_key):
                                unit_price=product.price, quantity=qty))
         total += product.price * qty
     OrderItem.objects.bulk_create(lines)
-    order.total_amount = total
-    order.save(update_fields=["total_amount"])
+    discount, coupon = Decimal("0"), None
+    if coupon_code:
+        coupon = find_coupon(coupon_code, lock=True)  # row lock: two buyers can't both take the last redemption
+        discount = check_coupon(coupon, user=user, subtotal=total)
+        Coupon.objects.filter(pk=coupon.pk).update(used_count=F("used_count") + 1)
+    order.subtotal, order.discount_amount, order.total_amount = total, discount, total - discount
+    order.coupon, order.coupon_code = coupon, coupon.code if coupon else ""
+    order.save(update_fields=["subtotal", "discount_amount", "total_amount", "coupon", "coupon_code"])
     return order
 
 
-def place_order(*, user, items, shipping, idempotency_key=None):
+def place_order(*, user, items, shipping, idempotency_key=None, coupon_code=""):
     """Returns (order, created). Calling again with the same idempotency key returns
     the original order instead of charging / reserving stock twice."""
     if idempotency_key:
@@ -92,7 +164,7 @@ def place_order(*, user, items, shipping, idempotency_key=None):
         if existing:
             return existing, False
     try:
-        order = _create_order(user, items, shipping, idempotency_key)
+        order = _create_order(user, items, shipping, idempotency_key, coupon_code)
     except IntegrityError:
         # two identical requests raced; the database's unique constraint picked one winner
         if idempotency_key:
@@ -106,7 +178,7 @@ def place_order(*, user, items, shipping, idempotency_key=None):
     try:
         info = get_provider().create_payment(order)
     except Exception:
-        cancel_order(order)
+        cancel_order(order, notify=False)  # the customer never saw this order
         raise
     order.payment_provider = info["provider"]
     order.provider_order_id = info["provider_order_id"]
@@ -115,7 +187,7 @@ def place_order(*, user, items, shipping, idempotency_key=None):
 
 
 @transaction.atomic
-def cancel_order(order):
+def cancel_order(order, notify=True):
     """Cancel an unpaid order and give its stock back."""
     order = Order.objects.select_for_update().get(pk=order.pk)
     if order.status == Order.Status.CANCELLED:
@@ -124,8 +196,12 @@ def cancel_order(order):
         raise OrderNotPayable("Only unpaid orders can be cancelled.")
     for item in order.items.select_related("product").order_by("product_id"):
         Product.objects.filter(pk=item.product_id).update(stock=F("stock") + item.quantity)
+    if order.coupon_id:  # a cancelled order gives its coupon redemption back
+        Coupon.objects.filter(pk=order.coupon_id, used_count__gt=0).update(used_count=F("used_count") - 1)
     order.status = Order.Status.CANCELLED
     order.save(update_fields=["status", "updated_at"])
+    if notify:
+        transaction.on_commit(lambda: emails.send_order_email(order.pk, "cancelled"))
     return order
 
 
@@ -144,6 +220,7 @@ def confirm_payment(*, order_id, user, payment_id, signature):
     order.status = Order.Status.PAID
     order.provider_payment_id = payment_id
     order.save(update_fields=["status", "provider_payment_id", "updated_at"])
+    transaction.on_commit(lambda: emails.send_order_email(order.pk, "paid"))
     return order
 
 
@@ -164,6 +241,7 @@ def settle_payment(*, provider_order_id, payment_id):
     order.status = Order.Status.PAID
     order.provider_payment_id = payment_id
     order.save(update_fields=["status", "provider_payment_id", "updated_at"])
+    transaction.on_commit(lambda: emails.send_order_email(order.pk, "paid"))
     return order
 
 

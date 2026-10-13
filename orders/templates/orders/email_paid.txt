@@ -1,0 +1,15 @@
+Hi {{ order.name }},
+
+Thanks for shopping with {{ shop }}! Your payment for order #{{ order.pk }} was received.
+
+{% for i in items %}- {{ i.product_name }} x {{ i.quantity }}: Rs {{ i.line_total }}
+{% endfor %}
+Subtotal: Rs {{ order.subtotal }}{% if order.discount_amount %}
+Discount ({{ order.coupon_code }}): -Rs {{ order.discount_amount }}{% endif %}
+Total paid: Rs {{ order.total_amount }}
+
+Delivering to: {{ order.address }}, {{ order.city }}
+
+View your order: {{ order_url }}
+
+{{ shop }}

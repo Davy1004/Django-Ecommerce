@@ -15,6 +15,7 @@ class CheckoutSerializer(serializers.Serializer):
     address = serializers.CharField(max_length=1000)
     city = serializers.CharField(max_length=100)
     phone = serializers.RegexField(r"^\+?[0-9 \-]{7,20}$", error_messages={"invalid": "Enter a valid phone number."})
+    coupon_code = serializers.CharField(max_length=40, required=False, allow_blank=True, default="")
 
     SHIPPING_FIELDS = ("name", "email", "address", "city", "phone")
 
@@ -35,10 +36,15 @@ class OrderSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Order
-        fields = ["id", "status", "total_amount", "name", "email", "address", "city", "phone",
+        fields = ["id", "status", "subtotal", "discount_amount", "coupon_code", "total_amount", "name", "email", "address", "city", "phone",
                   "payment_provider", "created_at", "items"]
 
 
 class PaySerializer(serializers.Serializer):
     payment_id = serializers.CharField(max_length=100)
     signature = serializers.CharField(max_length=256)
+
+
+class CouponPreviewSerializer(serializers.Serializer):
+    code = serializers.CharField(max_length=40)
+    items = CheckoutItemSerializer(many=True, allow_empty=False, max_length=50)

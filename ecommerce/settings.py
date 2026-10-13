@@ -146,6 +146,21 @@ WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET", "")
 EVENT_MAX_ATTEMPTS = int(os.environ.get("EVENT_MAX_ATTEMPTS", "5"))
 EVENT_BACKOFF_SECONDS = int(os.environ.get("EVENT_BACKOFF_SECONDS", "5"))
 
+# ---- Email ----------------------------------------------------------------
+# Default prints emails to the server log (works with no account). For real delivery set
+# EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend plus the EMAIL_HOST* variables.
+EMAIL_BACKEND = os.environ.get("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
+EMAIL_HOST = os.environ.get("EMAIL_HOST", "")
+EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
+EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = env_bool("EMAIL_USE_TLS", True)
+EMAIL_TIMEOUT = 10  # a slow mail server must never hang a payment request
+DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "ShopCraft <no-reply@shopcraft.local>")
+SHOP_NAME = os.environ.get("SHOP_NAME", "ShopCraft")
+# Used to build links inside emails (e.g. "view your order")
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000").rstrip("/")
+
 if not DEBUG:
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
     SECURE_SSL_REDIRECT = env_bool("SECURE_SSL_REDIRECT", True)

@@ -1,6 +1,38 @@
 from django.conf import settings
 from django.db import models
 from django.db.models import Q
+from django.utils import timezone
+
+
+class Coupon(models.Model):
+    class Kind(models.TextChoices):
+        PERCENT = "PERCENT", "Percent off"
+        FIXED = "FIXED", "Fixed amount off"
+
+    code = models.CharField(max_length=40, unique=True, help_text="Stored upper-case; customers can type it in any case.")
+    description = models.CharField(max_length=200, blank=True)
+    kind = models.CharField(max_length=8, choices=Kind.choices, default=Kind.PERCENT)
+    value = models.DecimalField(max_digits=10, decimal_places=2, help_text="Percent (e.g. 10) or rupees (e.g. 200).")
+    max_discount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, help_text="Cap for percent coupons.")
+    min_order_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    max_uses = models.PositiveIntegerField(null=True, blank=True, help_text="Total redemptions allowed; empty = unlimited.")
+    used_count = models.PositiveIntegerField(default=0, editable=False)
+    once_per_user = models.BooleanField(default=True)
+    valid_from = models.DateTimeField(null=True, blank=True)
+    valid_until = models.DateTimeField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(condition=Q(value__gt=0), name="coupon_value_gt_0"),
+        ]
+
+    def save(self, *args, **kwargs):
+        self.code = self.code.strip().upper()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.code
 
 
 class Order(models.Model):
@@ -19,6 +51,11 @@ class Order(models.Model):
     city = models.CharField(max_length=100)
     phone = models.CharField(max_length=20)
 
+    # subtotal = sum of the lines; total_amount = subtotal - discount_amount (what the customer pays)
+    subtotal = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    discount_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    coupon = models.ForeignKey(Coupon, null=True, blank=True, on_delete=models.SET_NULL, related_name="orders")
+    coupon_code = models.CharField(max_length=40, blank=True)  # snapshot, survives coupon deletion
     total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
 
     # payment bookkeeping

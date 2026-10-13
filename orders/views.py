@@ -6,7 +6,7 @@ from rest_framework.views import APIView
 from . import services
 from .models import Order
 from .payments import get_provider
-from .serializers import CheckoutSerializer, OrderSerializer, PaySerializer
+from .serializers import CheckoutSerializer, CouponPreviewSerializer, OrderSerializer, PaySerializer
 
 
 def checkout_error(exc):
@@ -19,7 +19,7 @@ def checkout_error(exc):
 class CheckoutView(APIView):
     """POST /orders/api/checkout/
 
-    Body: {items: [{product_id, quantity}], name, email, address, city, phone}
+    Body: {items: [{product_id, quantity}], name, email, address, city, phone, coupon_code?}
     Optional header: Idempotency-Key (any unique string per attempt).
     """
 
@@ -36,6 +36,7 @@ class CheckoutView(APIView):
                 items=serializer.validated_data["items"],
                 shipping=serializer.shipping(),
                 idempotency_key=key,
+                coupon_code=serializer.validated_data.get("coupon_code", ""),
             )
         except services.CheckoutError as exc:
             return checkout_error(exc)
@@ -82,3 +83,19 @@ class CancelOrderView(APIView):
         except services.CheckoutError as exc:
             return checkout_error(exc)
         return Response(OrderSerializer(order).data)
+
+
+class CouponPreviewView(APIView):
+    """POST /orders/api/coupons/validate/  {code, items} -> what the discount would be.
+    Read-only: nothing is reserved or redeemed until checkout."""
+
+    permission_classes = [IsAuthenticated]
+    throttle_scope = "checkout"
+
+    def post(self, request):
+        serializer = CouponPreviewSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            return Response(services.preview_coupon(user=request.user, **serializer.validated_data))
+        except services.CheckoutError as exc:
+            return checkout_error(exc)

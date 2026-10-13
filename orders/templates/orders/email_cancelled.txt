@@ -1,0 +1,9 @@
+Hi {{ order.name }},
+
+Order #{{ order.pk }} has been cancelled and nothing was charged. The items have gone back into stock.
+
+{% for i in items %}- {{ i.product_name }} x {{ i.quantity }}
+{% endfor %}
+Changed your mind? You can order again any time: {{ order_url }}
+
+{{ shop }}
