@@ -3,6 +3,7 @@ services:
   - type: web
     name: shop-api
     runtime: python
+    plan: free          # without this line Render assumes a paid plan and asks for a card
     buildCommand: ./build.sh
     startCommand: gunicorn ecommerce.wsgi:application
     healthCheckPath: /health/
