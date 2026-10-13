@@ -1,0 +1,29 @@
+# Free stand-in for a background worker (Render's free tier has none).
+# Every hour it drains the payment-event queue and cancels abandoned orders.
+# Setup: repo Settings -> Secrets and variables -> Actions -> add DATABASE_URL (the Neon string).
+# Run it by hand any time from the Actions tab ("Run workflow").
+# Hourly (not every 5 min) on purpose: it lets the free Neon database go back to sleep between runs.
+name: worker
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      SECRET_KEY: only-needed-to-start-django   # this job never serves requests
+      DEBUG: "False"
+      ALLOWED_HOSTS: localhost
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: python manage.py process_events --once
+      - run: python manage.py expire_pending_orders

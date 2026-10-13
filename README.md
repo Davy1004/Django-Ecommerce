@@ -57,6 +57,11 @@ A `payment.captured` for an already-cancelled (expired) order goes straight to D
 ## Abandoned checkouts
 Unpaid orders hold stock. `python manage.py expire_pending_orders` cancels those older than 30 min and returns the stock — run it on a schedule (Render cron / cron-job.org).
 
-## Deploy for free
-Render web service (`render.yaml`, `build.sh`) + free Postgres (Neon/Supabase) via `DATABASE_URL`; frontend on Vercel with `NEXT_PUBLIC_API_URL`.
-Note: uploaded product images need external storage in production (Render's disk is ephemeral).
+## Deploy for free (about 20 minutes, no card needed)
+1. **Database - [Neon](https://neon.com):** create a project, copy the connection string. Do not use Render's free Postgres: it expires after 30 days.
+2. **API - [Render](https://render.com):** *New → Blueprint*, pick this repo (it reads `render.yaml`). Paste the Neon string as `DATABASE_URL`. The build installs, migrates and seeds the demo shop (Render's free tier has no shell). Free services sleep after 15 min idle and take about a minute to wake.
+3. **Frontend - [Vercel](https://vercel.com):** import the repo, set *Root Directory* to `frontend`, add `NEXT_PUBLIC_API_URL=https://<your-api>.onrender.com`.
+4. Back in Render, set `CORS_ALLOWED_ORIGINS` to your Vercel address (no trailing slash) and let it redeploy.
+5. **Worker (free):** Render's free tier has no background workers, so `.github/workflows/worker.yml` runs `process_events --once` and `expire_pending_orders` every hour from GitHub Actions. Add your Neon string as a repo secret named `DATABASE_URL` (Settings → Secrets and variables → Actions). You can also run it by hand from the Actions tab. Scheduled runs are free for public repos.
+
+Notes: uploaded product images need external storage in production (Render's disk is ephemeral). Create an admin with `createsuperuser` locally against the Neon string, or ask for a seeded admin if you need `/admin` on the live site.
