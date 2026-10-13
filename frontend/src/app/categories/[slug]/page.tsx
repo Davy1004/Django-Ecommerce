@@ -9,12 +9,14 @@ export async function generateStaticParams() {
   return cats.map(c => ({ slug: c.slug }));
 }
 
-export default async function CategoryDetailPage({ params }: { params: { slug: string } }) {
-  const category = await getCategoryWithProducts(params.slug).catch(() => null);
+// Next 15+/16: route params arrive as a Promise and must be awaited.
+export default async function CategoryDetailPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const category = await getCategoryWithProducts(slug).catch(() => null);
   if (!category) notFound();
 
   // Fetch full product data
-  const products = await getProducts({ category: params.slug }).catch(() => []);
+  const products = await getProducts({ category: slug }).catch(() => []);
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-12">

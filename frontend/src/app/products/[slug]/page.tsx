@@ -10,8 +10,10 @@ export async function generateStaticParams() {
   return products.map(p => ({ slug: p.slug }));
 }
 
-export default async function ProductDetailPage({ params }: { params: { slug: string } }) {
-  const product = await getProduct(params.slug).catch(() => null);
+// Next 15+/16: route params arrive as a Promise and must be awaited.
+export default async function ProductDetailPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const product = await getProduct(slug).catch(() => null);
   if (!product) notFound();
 
   return (

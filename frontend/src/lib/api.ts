@@ -73,7 +73,11 @@ async function fetchAPI<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export const getProducts = (params?: { category?: string; search?: string }) => {
-  const qs = new URLSearchParams(params as Record<string, string>).toString();
+  // only send filters that are actually set - "category=undefined" would match nothing
+  const query = new URLSearchParams();
+  if (params?.category) query.set('category', params.category);
+  if (params?.search) query.set('search', params.search);
+  const qs = query.toString();
   return fetchAPI<Product[]>(`/api/products/${qs ? '?' + qs : ''}`);
 };
 export const getProduct = (slug: string) => fetchAPI<Product>(`/api/products/${slug}/`);
