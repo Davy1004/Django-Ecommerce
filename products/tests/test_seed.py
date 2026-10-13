@@ -26,3 +26,13 @@ def test_every_product_has_an_illustration():
     call_command("seed_demo")
     missing = [p.slug for p in Product.objects.all() if not (PUBLIC / f"{p.slug}.svg").exists()]
     assert not missing
+
+
+@pytest.mark.django_db
+def test_seed_creates_coupons_without_resetting_usage():
+    from orders.models import Coupon
+    call_command("seed_demo")
+    assert Coupon.objects.filter(code__in=["WELCOME10", "FLAT200", "BOOKWORM15"]).count() == 3
+    Coupon.objects.filter(code="WELCOME10").update(used_count=7, is_active=False)
+    call_command("seed_demo")
+    assert Coupon.objects.get(code="WELCOME10").used_count == 7

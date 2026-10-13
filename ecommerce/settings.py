@@ -146,6 +146,9 @@ WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET", "")
 EVENT_MAX_ATTEMPTS = int(os.environ.get("EVENT_MAX_ATTEMPTS", "5"))
 EVENT_BACKOFF_SECONDS = int(os.environ.get("EVENT_BACKOFF_SECONDS", "5"))
 
+# Day boundaries used by the sales dashboard
+STATS_TIMEZONE = os.environ.get("STATS_TIMEZONE", "Asia/Kolkata")
+
 # ---- Email ----------------------------------------------------------------
 # Default prints emails to the server log (works with no account). For real delivery set
 # EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend plus the EMAIL_HOST* variables.

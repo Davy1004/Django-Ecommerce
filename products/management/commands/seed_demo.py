@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from django.core.management.base import BaseCommand
 
+from orders.models import Coupon
 from products.models import Category, Product
 
 # (name, price, stock, description). Slugs come from the name and must match the
@@ -45,6 +46,13 @@ DEMO = {
     ],
 }
 
+COUPONS = [
+    # code, description, kind, value, min order, max discount
+    ("WELCOME10", "10% off your order (up to \u20b9500)", "PERCENT", "10", "0", "500"),
+    ("FLAT200", "\u20b9200 off orders above \u20b91,500", "FIXED", "200", "1500", None),
+    ("BOOKWORM15", "15% off, capped at \u20b9300", "PERCENT", "15", "500", "300"),
+]
+
 
 class Command(BaseCommand):
     help = "Create (or refresh) the demo catalogue. Safe to run on every deploy: stock and orders are never reset."
@@ -61,4 +69,9 @@ class Command(BaseCommand):
                     # refresh the copy, but leave stock alone so a redeploy never undoes real sales
                     product.category, product.price, product.description = category, Decimal(price), description
                     product.save(update_fields=["category", "price", "description"])
+        for code, description, kind, value, minimum, cap in COUPONS:
+            Coupon.objects.update_or_create(code=code, defaults={
+                "description": description, "kind": kind, "value": Decimal(value),
+                "min_order_amount": Decimal(minimum), "max_discount": Decimal(cap) if cap else None,
+            })  # used_count is not touched, so redeemed coupons stay redeemed across deploys
         self.stdout.write(self.style.SUCCESS(f"Demo catalogue ready: {Product.objects.count()} products."))

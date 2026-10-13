@@ -10,3 +10,7 @@ node_modules/
 .pytest_cache/
 .env.local
 .env*.local
+
+# build output
+frontend/tsconfig.tsbuildinfo
+frontend/next-env.d.ts
