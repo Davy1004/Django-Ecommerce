@@ -8,11 +8,12 @@ export interface CartItem {
   quantity: number;
   image: string | null;
   slug: string;
+  stock?: number;
 }
 
 interface CartContextType {
   items: CartItem[];
-  addItem: (item: Omit<CartItem, 'quantity'>) => void;
+  addItem: (item: Omit<CartItem, 'quantity'>, qty?: number) => void;
   removeItem: (id: number) => void;
   updateQuantity: (id: number, qty: number) => void;
   clearCart: () => void;
@@ -24,21 +25,30 @@ const CartContext = createContext<CartContextType | null>(null);
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    const saved = localStorage.getItem('cart');
-    if (saved) setItems(JSON.parse(saved));
+    try {
+      const saved = localStorage.getItem('cart');
+      if (saved) setItems(JSON.parse(saved));
+    } catch { /* corrupted or blocked storage: start with an empty cart */ }
+    setReady(true);
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('cart', JSON.stringify(items));
-  }, [items]);
+    if (!ready) return; // don't overwrite the saved cart with [] before it has been read
+    try { localStorage.setItem('cart', JSON.stringify(items)); } catch { /* ignore */ }
+  }, [items, ready]);
 
-  const addItem = (item: Omit<CartItem, 'quantity'>) => {
+  const clamp = (qty: number, stock?: number) => Math.max(1, Math.min(qty, stock ?? 100, 100));
+
+  const addItem = (item: Omit<CartItem, 'quantity'>, qty = 1) => {
     setItems(prev => {
       const existing = prev.find(i => i.id === item.id);
-      if (existing) return prev.map(i => i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i);
-      return [...prev, { ...item, quantity: 1 }];
+      if (existing) {
+        return prev.map(i => i.id === item.id ? { ...i, stock: item.stock ?? i.stock, quantity: clamp(i.quantity + qty, item.stock ?? i.stock) } : i);
+      }
+      return [...prev, { ...item, quantity: clamp(qty, item.stock) }];
     });
   };
 
@@ -46,7 +56,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const updateQuantity = (id: number, qty: number) => {
     if (qty <= 0) return removeItem(id);
-    setItems(prev => prev.map(i => i.id === id ? { ...i, quantity: qty } : i));
+    setItems(prev => prev.map(i => i.id === id ? { ...i, quantity: clamp(qty, i.stock) } : i));
   };
 
   const clearCart = () => setItems([]);

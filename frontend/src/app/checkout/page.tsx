@@ -4,14 +4,16 @@ import { useCart } from '@/context/CartContext';
 import { placeOrder, payOrder } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
-import Image from 'next/image';
 import Link from 'next/link';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { ArrowLeft, Loader2, Lock } from 'lucide-react';
+import { inr } from '@/lib/format';
+import { useToast } from '@/context/ToastContext';
 
 export default function CheckoutPage() {
   const { items, totalPrice, clearCart } = useCart();
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
+  const { show } = useToast();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [form, setForm] = useState({ name: '', email: '', address: '', city: '', phone: '' });
@@ -41,6 +43,7 @@ export default function CheckoutPage() {
     e.preventDefault();
     setError('');
     setLoading(true);
+    let orderId: number | null = null;
     try {
       // One key per checkout attempt: a double click or retry can't create two orders.
       const key = crypto.randomUUID();
@@ -48,13 +51,22 @@ export default function CheckoutPage() {
         { ...form, items: items.map(i => ({ product_id: i.id, quantity: i.quantity })) },
         key,
       );
+      orderId = order.id;
       // Demo payment (PAYMENT_PROVIDER=mock). With Razorpay you would open Razorpay Checkout
       // using order.payment.key_id / provider_order_id, then send its payment_id + signature here.
       await payOrder(order.id, `mock_pay_${order.id}`, 'mock_success');
       clearCart();
-      router.push('/order-success');
+      router.push(`/order-success?order=${order.id}`);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
+      const msg = err instanceof Error ? err.message : 'Something went wrong. Please try again.';
+      if (orderId !== null) {
+        // The order exists (stock is reserved) but payment failed: send them to it so they can retry or cancel.
+        clearCart();
+        show('Order created, but payment did not go through', 'error');
+        router.push(`/orders/${orderId}`);
+      } else {
+        setError(msg);
+      }
     } finally {
       setLoading(false);
     }
@@ -104,8 +116,9 @@ export default function CheckoutPage() {
             </div>
           </div>
 
-          <button type="submit" disabled={loading} className="btn-primary flex items-center justify-center gap-2 mt-2">
-            {loading ? <><Loader2 size={18} className="animate-spin" /> Placing Order...</> : `Place Order — ₹${totalPrice.toFixed(2)}`}
+          <p className="text-xs muted flex items-center gap-1.5"><Lock size={12} /> Demo checkout: your card is never charged.</p>
+          <button type="submit" disabled={loading} className="btn-primary flex items-center justify-center gap-2 mt-1">
+            {loading ? <><Loader2 size={18} className="animate-spin" /> Placing Order...</> : `Place order — ${inr(totalPrice)}`}
           </button>
         </form>
 
@@ -118,20 +131,21 @@ export default function CheckoutPage() {
                 <div key={item.id} className="flex gap-3 items-center">
                   <div className="relative rounded-lg overflow-hidden flex-shrink-0"
                     style={{ width: 48, height: 48, background: 'var(--card-img-bg)' }}>
-                    {item.image && <Image src={item.image} alt={item.name} fill className="object-cover" />}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={item.image || `/products/${item.slug}.svg`} alt={item.name} className="w-full h-full object-cover" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p style={{ fontSize: '0.85rem', color: 'var(--fg)' }} className="line-clamp-1">{item.name}</p>
                     <p style={{ fontSize: '0.75rem', color: 'var(--fg-muted)' }}>×{item.quantity}</p>
                   </div>
-                  <span style={{ fontSize: '0.9rem', fontWeight: 600 }}>₹{(item.price * item.quantity).toFixed(2)}</span>
+                  <span style={{ fontSize: '0.9rem', fontWeight: 600 }}>{inr(item.price * item.quantity)}</span>
                 </div>
               ))}
             </div>
             <div className="border-t pt-4" style={{ borderColor: 'var(--border)' }}>
               <div className="flex justify-between font-bold">
                 <span>Total</span>
-                <span>₹{totalPrice.toFixed(2)}</span>
+                <span>{inr(totalPrice)}</span>
               </div>
             </div>
           </div>

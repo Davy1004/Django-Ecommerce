@@ -38,6 +38,48 @@ export interface Order {
   payment: { provider: string; provider_order_id: string; amount: number; currency: string; key_id?: string };
 }
 
+export interface OrderItem {
+  product_id: number;
+  product_name: string;
+  unit_price: number;
+  quantity: number;
+  line_total: number;
+}
+
+export interface OrderDetail {
+  id: number;
+  status: 'PENDING' | 'PAID' | 'CANCELLED';
+  total_amount: number;
+  name: string;
+  email: string;
+  address: string;
+  city: string;
+  phone: string;
+  payment_provider: string;
+  created_at: string;
+  items: OrderItem[];
+}
+
+export interface Page<T> {
+  count: number;
+  results: T[];
+}
+
+export class ApiError extends Error {
+  constructor(message: string, public status: number) {
+    super(message);
+  }
+}
+
+/** Resolve to null instead of throwing, so a page can show "server is waking up" rather than crash. */
+export async function safe<T>(p: Promise<T>): Promise<T | null> {
+  try {
+    return await p;
+  } catch {
+    return null;
+  }
+}
+
 export interface User {
   id: number;
   username: string;
@@ -67,18 +109,25 @@ async function fetchAPI<T>(path: string, options?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || `API Error: ${res.status}`);
+    throw new ApiError(err.error || `API Error: ${res.status}`, res.status);
   }
   return res.json();
 }
 
-export const getProducts = (params?: { category?: string; search?: string }) => {
-  // only send filters that are actually set - "category=undefined" would match nothing
-  const query = new URLSearchParams();
-  if (params?.category) query.set('category', params.category);
-  if (params?.search) query.set('search', params.search);
-  const qs = query.toString();
-  return fetchAPI<Product[]>(`/api/products/${qs ? '?' + qs : ''}`);
+export const PAGE_SIZE = 12;
+
+/** Plain list of products (no pagination); only sends the filters that are actually set. */
+export const getProducts = (params?: { category?: string; search?: string; ordering?: string }) => {
+  const qs = new URLSearchParams();
+  Object.entries(params ?? {}).forEach(([k, v]) => v && qs.set(k, v));
+  return fetchAPI<Product[]>(`/api/products/${qs.size ? '?' + qs : ''}`);
+};
+
+export const getProductsPage = (params: { category?: string; search?: string; ordering?: string; page?: number; pageSize?: number }) => {
+  const size = params.pageSize ?? PAGE_SIZE;
+  const qs = new URLSearchParams({ limit: String(size), offset: String(((params.page ?? 1) - 1) * size) });
+  (['category', 'search', 'ordering'] as const).forEach(k => params[k] && qs.set(k, params[k]!));
+  return fetchAPI<Page<Product>>(`/api/products/?${qs}`);
 };
 export const getProduct = (slug: string) => fetchAPI<Product>(`/api/products/${slug}/`);
 export const getCategories = () => fetchAPI<Category[]>('/api/categories/');
@@ -92,6 +141,8 @@ export const payOrder = (orderId: number, paymentId: string, signature: string) 
   fetchAPI<Order>(`/orders/api/orders/${orderId}/pay/`, {
     method: 'POST', body: JSON.stringify({ payment_id: paymentId, signature }),
   });
+export const getOrders = () => fetchAPI<OrderDetail[]>('/orders/api/orders/');
+export const getOrder = (id: number | string) => fetchAPI<OrderDetail>(`/orders/api/orders/${id}/`);
 export const cancelOrder = (orderId: number) =>
   fetchAPI<Order>(`/orders/api/orders/${orderId}/cancel/`, { method: 'POST' });
 

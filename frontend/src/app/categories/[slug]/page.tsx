@@ -1,45 +1,62 @@
-import { getCategoryWithProducts, getCategories, getProducts } from '@/lib/api';
-import ProductCard from '@/components/ProductCard';
 import Link from 'next/link';
+import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
+import { ApiError, getCategories, getProductsPage, safe, PAGE_SIZE } from '@/lib/api';
+import { categoryImage } from '@/lib/format';
+import ProductCard from '@/components/ProductCard';
+import SortSelect from '@/components/SortSelect';
+import Pagination from '@/components/Pagination';
+import Breadcrumbs from '@/components/Breadcrumbs';
+import ApiDown from '@/components/ApiDown';
 
-export async function generateStaticParams() {
-  const cats = await getCategories().catch(() => []);
-  return cats.map(c => ({ slug: c.slug }));
+export const dynamic = 'force-dynamic';
+
+type Props = { params: Promise<{ slug: string }>; searchParams: Promise<{ ordering?: string; page?: string }> };
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const slug = (await params).slug;
+  const cat = (await safe(getCategories()))?.find(c => c.slug === slug);
+  return { title: cat?.name ?? 'Category' };
 }
 
-// Next 15+/16: route params arrive as a Promise and must be awaited.
-export default async function CategoryDetailPage({ params }: { params: Promise<{ slug: string }> }) {
+export default async function CategoryDetailPage({ params, searchParams }: Props) {
   const { slug } = await params;
-  const category = await getCategoryWithProducts(slug).catch(() => null);
-  if (!category) notFound();
+  const sp = await searchParams;
+  const page = Math.max(1, parseInt(sp.page ?? '1', 10) || 1);
 
-  // Fetch full product data
-  const products = await getProducts({ category: slug }).catch(() => []);
+  const [categories, data] = await Promise.all([safe(getCategories()), safe(getProductsPage({ category: slug, ordering: sp.ordering, page }))]);
+  if (!categories || !data) return <ApiDown />;
+  const category = categories.find(c => c.slug === slug);
+  if (!category) notFound();
+  const others = categories.filter(c => c.slug !== slug);
+  const pages = Math.max(1, Math.ceil(data.count / PAGE_SIZE));
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-12">
-      <Link href="/categories" className="inline-flex items-center gap-2 mb-10 hover:opacity-70 transition-opacity"
-        style={{ color: 'var(--fg-muted)', fontSize: '0.9rem' }}>
-        <ArrowLeft size={16} /> All categories
-      </Link>
+    <div className="container-x py-10">
+      <Breadcrumbs trail={[{ label: 'Home', href: '/' }, { label: 'Categories', href: '/categories' }, { label: category.name }]} />
 
-      <div className="mb-10">
-        <p style={{ color: 'var(--accent)', fontSize: '0.8rem', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: '8px' }}>
-          Collection
-        </p>
-        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '2.4rem' }}>{category.name}</h1>
-        <p style={{ color: 'var(--fg-muted)', marginTop: '8px' }}>{products.length} products</p>
+      <div className="card overflow-hidden grid md:grid-cols-[1fr_320px] items-center mb-10">
+        <div className="p-8 md:p-10">
+          <p className="eyebrow mb-2">Collection</p>
+          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '2.6rem', lineHeight: 1.1 }}>{category.name}</h1>
+          <p className="muted mt-3">{data.count} product{data.count !== 1 ? 's' : ''}</p>
+        </div>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={categoryImage(slug)} alt="" className="hidden md:block w-full h-full object-cover" style={{ maxHeight: 200 }} />
       </div>
 
-      {products.length === 0 ? (
-        <div className="text-center py-20" style={{ color: 'var(--fg-muted)' }}>No products in this category yet.</div>
-      ) : (
-        <div className="grid gap-6" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}>
-          {products.map(p => <ProductCard key={p.id} product={p} />)}
+      <div className="flex items-center justify-between gap-4 flex-wrap mb-8">
+        <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+          {others.map(c => <Link key={c.id} href={`/categories/${c.slug}`} className="chip">{c.name}</Link>)}
         </div>
-      )}
+        <SortSelect basePath={`/categories/${slug}`} />
+      </div>
+
+      {data.results.length === 0
+        ? <div className="card text-center py-16 muted">No products in this category yet.</div>
+        : <div className="grid-products">{data.results.map(p => <ProductCard key={p.id} product={p} />)}</div>}
+
+      <Pagination page={page} pages={pages} basePath={`/categories/${slug}`} params={{ ordering: sp.ordering }} />
     </div>
   );
 }

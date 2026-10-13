@@ -1,11 +1,11 @@
 'use client';
 import { useCart } from '@/context/CartContext';
-import Image from 'next/image';
 import Link from 'next/link';
 import { Minus, Plus, Trash2, ShoppingBag, ArrowRight } from 'lucide-react';
+import { inr } from '@/lib/format';
 
 export default function CartPage() {
-  const { items, removeItem, updateQuantity, totalPrice } = useCart();
+  const { items, removeItem, updateQuantity, clearCart, totalPrice, totalItems } = useCart();
 
   if (items.length === 0) {
     return (
@@ -22,7 +22,10 @@ export default function CartPage() {
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-12">
-      <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '2.2rem', marginBottom: '32px' }}>Your Cart</h1>
+      <div className="flex items-end justify-between mb-8">
+        <h1 className="section-title" style={{ fontSize: '2.2rem' }}>Your cart <span className="muted" style={{ fontSize: '1rem', fontFamily: 'var(--font-body)' }}>({totalItems} item{totalItems !== 1 ? 's' : ''})</span></h1>
+        <button onClick={clearCart} className="text-sm muted hover:text-[#dc2626] transition-colors">Clear cart</button>
+      </div>
 
       <div className="grid md:grid-cols-3 gap-10">
         {/* Items */}
@@ -32,7 +35,8 @@ export default function CartPage() {
               style={{ background: 'var(--card-bg)', border: '1px solid var(--border)' }}>
               <div className="relative rounded-xl overflow-hidden flex-shrink-0"
                 style={{ width: 88, height: 88, background: 'var(--card-img-bg)' }}>
-                {item.image && <Image src={item.image} alt={item.name} fill className="object-cover" />}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={item.image || `/products/${item.slug}.svg`} alt={item.name} className="w-full h-full object-cover" />
               </div>
               <div className="flex-1 min-w-0">
                 <Link href={`/products/${item.slug}`}
@@ -41,7 +45,7 @@ export default function CartPage() {
                   {item.name}
                 </Link>
                 <p style={{ color: 'var(--accent)', fontWeight: 700, marginTop: '4px' }}>
-                  ₹{(item.price * item.quantity).toFixed(2)}
+                  {inr(item.price * item.quantity)}
                 </p>
               </div>
               <div className="flex flex-col items-end gap-3">
@@ -55,8 +59,9 @@ export default function CartPage() {
                     <Minus size={12} />
                   </button>
                   <span style={{ fontWeight: 600, minWidth: '20px', textAlign: 'center' }}>{item.quantity}</span>
-                  <button onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                    className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors hover:bg-[var(--border)]"
+                  <button onClick={() => updateQuantity(item.id, item.quantity + 1)} disabled={item.stock !== undefined && item.quantity >= item.stock}
+                    aria-label="Increase quantity"
+                    className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors hover:bg-[var(--border)] disabled:opacity-30"
                     style={{ border: '1px solid var(--border)' }}>
                     <Plus size={12} />
                   </button>
@@ -70,8 +75,8 @@ export default function CartPage() {
         <div className="h-fit rounded-2xl p-6" style={{ background: 'var(--card-bg)', border: '1px solid var(--border)' }}>
           <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.3rem', marginBottom: '20px' }}>Order Summary</h2>
           <div className="flex justify-between mb-3" style={{ color: 'var(--fg-muted)', fontSize: '0.9rem' }}>
-            <span>Subtotal</span>
-            <span>₹{totalPrice.toFixed(2)}</span>
+            <span>Subtotal ({totalItems} items)</span>
+            <span>{inr(totalPrice)}</span>
           </div>
           <div className="flex justify-between mb-3" style={{ color: 'var(--fg-muted)', fontSize: '0.9rem' }}>
             <span>Shipping</span>
@@ -79,7 +84,7 @@ export default function CartPage() {
           </div>
           <div className="border-t pt-4 mt-4 flex justify-between font-bold" style={{ borderColor: 'var(--border)', fontSize: '1.1rem' }}>
             <span>Total</span>
-            <span>₹{totalPrice.toFixed(2)}</span>
+            <span>{inr(totalPrice)}</span>
           </div>
           <Link href="/checkout" className="btn-primary flex items-center justify-center gap-2 mt-6 w-full">
             Proceed to Checkout <ArrowRight size={16} />

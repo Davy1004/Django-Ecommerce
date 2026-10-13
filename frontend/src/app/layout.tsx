@@ -4,13 +4,15 @@ import './globals.css';
 import { CartProvider } from '@/context/CartContext';
 import { AuthProvider } from '@/context/AuthContext';
 import Navbar from '@/components/Navbar';
+import Footer from '@/components/Footer';
+import { ToastProvider } from '@/context/ToastContext';
 
 const display = Playfair_Display({ subsets: ['latin'], variable: '--font-display', display: 'swap' });
 const body = DM_Sans({ subsets: ['latin'], variable: '--font-body', display: 'swap' });
 
 export const metadata: Metadata = {
-  title: 'ShopCraft — Premium E-commerce',
-  description: 'A curated shopping experience',
+  title: { default: 'ShopCraft — a curated online store', template: '%s · ShopCraft' },
+  description: 'A demo store built with Django REST Framework and Next.js: browse, search, order and track purchases.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -19,8 +21,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <AuthProvider>
           <CartProvider>
-            <Navbar />
-            <main>{children}</main>
+            <ToastProvider>
+              <Navbar />
+              <main style={{ minHeight: '60vh' }}>{children}</main>
+              <Footer />
+            </ToastProvider>
           </CartProvider>
         </AuthProvider>
       </body>
