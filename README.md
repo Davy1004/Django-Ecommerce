@@ -1,5 +1,7 @@
 # ShopCraft API — Django REST + Next.js
 
+**Live storefront:** https://django-ecommerce-theta.vercel.app (free tier: the API sleeps when idle, so the first load can take about a minute)
+
 E-commerce backend with a checkout that is safe by design: the server (not the browser) decides prices,
 stock is reserved atomically, orders can be retried without duplicates, and payments are verified by signature.
 
